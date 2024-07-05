@@ -206,4 +206,5 @@ def restart_vm():
 
 threading.Thread(target=check_expired_vms, daemon=True).start()
 if __name__ == '__main__':
-    app.run()
+    # app.run()
+    pass

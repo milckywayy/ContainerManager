@@ -8,10 +8,18 @@ from docker import errors
 import threading
 import time
 from datetime import datetime, timedelta
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
 CORS(app)
 client = docker.from_env()
+
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["500 per day", "200 per hour", "20 per minute"]
+)
 
 PASSWORD_LENGTH = 14
 DEFAULT_STUDENT_PASSWORD = '12345678'

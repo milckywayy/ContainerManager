@@ -2,7 +2,7 @@ import logging
 import random
 import string
 from flask_cors import CORS
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, abort
 import docker
 from docker import errors
 import threading
@@ -10,6 +10,8 @@ import time
 from datetime import datetime, timedelta
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+import json
+from functools import wraps
 
 app = Flask(__name__)
 CORS(app)
@@ -44,6 +46,19 @@ TAG_TO_EXPOSED_PORT = {
     'ws': 80,
     'sws': 443
 }
+
+with open('credentials/secret_key.json') as f:
+    secret_data = json.load(f)
+    SECRET_KEY = secret_data['secret']
+
+
+def require_secret_key(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if request.headers.get('X-Secret-Key') != SECRET_KEY:
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 def get_container_name(session_id):
@@ -90,6 +105,7 @@ def check_expired_containers():
 
 
 @app.route('/make_container/<image>', methods=['POST'])
+@require_secret_key
 def make_container(image):
     if not AVAILABLE_PORTS:
         logger.error("No available ports")
@@ -149,6 +165,7 @@ def make_container(image):
 
 
 @app.route('/remove_container', methods=['DELETE'])
+@require_secret_key
 def remove_container():
     data = request.json
     session_id = data['session_id']
@@ -188,6 +205,7 @@ def _remove_container(session_id, container_name):
 
 
 @app.route('/container_status', methods=['POST'])
+@require_secret_key
 def container_status():
     if request.method != 'POST':
         return jsonify({'error': 'Method not allowed'}), 405
@@ -232,6 +250,7 @@ def container_status():
 
 
 @app.route('/extend_container', methods=['POST'])
+@require_secret_key
 def extend_container():
     if request.method != 'POST':
         return jsonify({'error': 'Method not allowed'}), 405
@@ -256,6 +275,7 @@ def extend_container():
 
 
 @app.route('/restart_container', methods=['POST'])
+@require_secret_key
 def restart_container():
     if request.method != 'POST':
         return jsonify({'error': 'Method not allowed'}), 405

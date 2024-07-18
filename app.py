@@ -122,6 +122,10 @@ def make_container(image):
     if not image_exists(image):
         return jsonify({'error': 'Image not found'}), 404
 
+    if not check_memory_availability():
+        logger.error("Not enough memory to create a new container")
+        return jsonify({'error': 'Resource limit reached. Please wait a moment and try again.'}), 500
+
     data = request.json
     session_id = data['session_id']
     name = get_container_name(session_id)

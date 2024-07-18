@@ -3,8 +3,8 @@ from app import app
 
 serve(
     app,
-    host='0.0.0.0',
-    port=8080,
+    host='localhost',
+    port=5000,
     threads=8,
     backlog=2048,
     channel_timeout=120,

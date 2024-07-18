@@ -12,6 +12,7 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import json
 from functools import wraps
+import psutil
 
 app = Flask(__name__)
 CORS(app)
@@ -37,6 +38,7 @@ EXPIRATION_INTERVAL = 30  # 30 minutes
 CHECK_INTERVAL = 60  # Check every 60 seconds for expired vms
 CONTAINER_TIME_EXTENSION = 15  # minutes
 CONTAINER_MIN_TIME_TO_ALLOW_EXTENSION = 15  # minutes
+MEMORY_THRESHOLD = 300  # Minimum MB of RAM available to create a new container
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -89,6 +91,12 @@ def is_container_created(container_name):
 
 def get_tag(image_name):
     return image_name.split(':')[1]
+
+
+def check_memory_availability():
+    memory_info = psutil.virtual_memory()
+    available_memory_mb = memory_info.available / 1024 / 1024
+    return available_memory_mb > MEMORY_THRESHOLD
 
 
 def check_expired_containers():

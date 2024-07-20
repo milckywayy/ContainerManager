@@ -19,9 +19,10 @@ CORS(app)
 client = docker.from_env()
 
 limiter = Limiter(
-    get_remote_address,
+    key_func=get_remote_address,
     app=app,
-    default_limits=["500 per day", "200 per hour", "20 per minute"]
+    default_limits=["1000 per day", "500 per hour", "30 per minute"],
+    headers_enabled=True
 )
 
 PASSWORD_LENGTH = 14

@@ -220,16 +220,25 @@ def _remove_container(session_id, container_name):
     return True
 
 
-@app.route('/container_status', methods=['POST'])
+@app.route('/container_status/<image>', methods=['POST'])
 @require_secret_key
-def container_status():
+def container_status(image):
     data = request.json
     session_id = data['session_id']
 
     container_name = get_container_name(session_id)
 
+    if not is_container_created(container_name):
+        return jsonify({'status': 'not_created'}), 200
+
     try:
         container = client.containers.get(container_name)
+        container_image_name = container.image.tags[0]
+
+        if container_image_name != image:
+            logger.error(f'Removing old container for {session_id} because {container_image_name} does not match {image}')
+            _remove_container(session_id, container_name)
+            return jsonify({'status': 'not_created'}), 200
 
         tag = get_tag(container.image.tags[0])
         port = OCCUPIED_PORTS[session_id]
@@ -253,9 +262,6 @@ def container_status():
             'access_command': access_command
         }
         return jsonify(vm_info), 200
-
-    except docker.errors.NotFound:
-        return jsonify({'status': 'not_created'}), 200
 
     except Exception as e:
         logger.error(f"Error retrieving container status: {e}")

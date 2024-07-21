@@ -119,10 +119,11 @@ def check_expired_containers():
 @require_secret_key
 def make_container(image):
     if not AVAILABLE_PORTS:
-        logger.error("No available ports")
+        logger.error("No available ports to create a new container.")
         return jsonify({'error': 'No available ports'}), 500
 
     if not image_exists(image):
+        logger.error(f"Couldn't create new container. {image} does not exist.")
         return jsonify({'error': 'Image not found'}), 404
 
     if not check_memory_availability():
@@ -134,7 +135,7 @@ def make_container(image):
     name = get_container_name(session_id)
 
     if is_container_created(name):
-        return jsonify({'error': 'Container already exists'}), 409
+        return jsonify({'error': "Couldn't create new container. Container already exists"}), 409
 
     tag = get_tag(image)
     with lock:
@@ -143,8 +144,6 @@ def make_container(image):
         password = generate_random_password()
         AVAILABLE_PORTS.remove(port)
         OCCUPIED_PORTS[session_id] = port
-
-    logger.info(f"Creating container with session ID {session_id} on port {port}")
 
     try:
         vm = client.containers.run(
@@ -172,10 +171,11 @@ def make_container(image):
             if session_id in CONTAINER_EXPIRATION_TIMES:
                 del CONTAINER_EXPIRATION_TIMES[session_id]
 
-        logger.error(f"Error creating container: {e}")
+        logger.error(f"Error while creating new container: {e}")
         return jsonify({'error': str(e)}), 500
 
-    logger.info(f"Container created: {name}")
+    running_containers = len(client.containers.list())
+    logger.info(f"Container created: {name}. Total running containers: {running_containers}.")
     return jsonify(status='Container created'), 200
 
 
@@ -210,7 +210,8 @@ def _remove_container(session_id, container_name):
             if session_id in CONTAINER_EXPIRATION_TIMES:
                 del CONTAINER_EXPIRATION_TIMES[session_id]
 
-        logger.info(f"Container removed: {container_name}")
+        running_containers = len(client.containers.list())
+        logger.info(f"Container removed: {container_name}. Total running containers: {running_containers}.")
 
     except Exception as e:
         logger.error(f"Error removing container: {e}")
@@ -222,9 +223,6 @@ def _remove_container(session_id, container_name):
 @app.route('/container_status', methods=['POST'])
 @require_secret_key
 def container_status():
-    if request.method != 'POST':
-        return jsonify({'error': 'Method not allowed'}), 405
-
     data = request.json
     session_id = data['session_id']
 
@@ -267,9 +265,6 @@ def container_status():
 @app.route('/extend_container', methods=['POST'])
 @require_secret_key
 def extend_container():
-    if request.method != 'POST':
-        return jsonify({'error': 'Method not allowed'}), 405
-
     data = request.json
     session_id = data['session_id']
 
@@ -292,9 +287,6 @@ def extend_container():
 @app.route('/restart_container', methods=['POST'])
 @require_secret_key
 def restart_container():
-    if request.method != 'POST':
-        return jsonify({'error': 'Method not allowed'}), 405
-
     data = request.json
     session_id = data['session_id']
 
@@ -307,6 +299,7 @@ def restart_container():
         return jsonify(status='Container restarted'), 200
 
     except docker.errors.NotFound:
+        logger.info(f"Couldn't restart container. Container not found: {container_name}")
         return jsonify({'error': 'Container not found'}), 404
 
     except Exception as e:

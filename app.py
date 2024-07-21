@@ -14,6 +14,8 @@ import json
 from functools import wraps
 import psutil
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+
 app = Flask(__name__)
 CORS(app)
 client = docker.from_env()

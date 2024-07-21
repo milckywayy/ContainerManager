@@ -236,7 +236,7 @@ def container_status(image):
         container_image_name = container.image.tags[0]
 
         if container_image_name != image:
-            logger.error(f'Removing old container for {session_id} because {container_image_name} does not match {image}')
+            logger.info(f'Removing old container for {session_id} because {container_image_name} does not match {image}')
             _remove_container(session_id, container_name)
             return jsonify({'status': 'not_created'}), 200
 

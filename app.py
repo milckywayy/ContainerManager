@@ -175,7 +175,7 @@ def make_container(image):
         return jsonify({'error': str(e)}), 500
 
     running_containers = len(client.containers.list())
-    logger.info(f"Container created: {name}. Total running containers: {running_containers}.")
+    logger.info(f"Container created: {name} on port {port}. Total running containers: {running_containers}.")
     return jsonify(status='Container created'), 200
 
 

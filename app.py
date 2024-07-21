@@ -8,8 +8,8 @@ from docker import errors
 import threading
 import time
 from datetime import datetime, timedelta
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
+# from flask_limiter import Limiter
+# from flask_limiter.util import get_remote_address
 import json
 from functools import wraps
 import psutil
@@ -18,12 +18,12 @@ app = Flask(__name__)
 CORS(app)
 client = docker.from_env()
 
-limiter = Limiter(
-    key_func=get_remote_address,
-    app=app,
-    default_limits=["1000 per day", "500 per hour", "30 per minute"],
-    headers_enabled=True
-)
+# limiter = Limiter(
+#     key_func=get_remote_address,
+#     app=app,
+#     default_limits=["1000 per day", "500 per hour", "30 per minute"],
+#     headers_enabled=True
+# )
 
 PASSWORD_LENGTH = 14
 DEFAULT_STUDENT_PASSWORD = '12345678'

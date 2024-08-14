@@ -38,9 +38,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 TAG_TO_EXPOSED_PORT = {
-    'vm': 22,
-    'ws': 80,
-    'sws': 443
+    'vm': [22],
+    'ws': [80],
+    'sws': [443],
+    'ws_over_vm': [80, 22]
 }
 
 with open('credentials/secret_key.json') as f:
@@ -109,7 +110,15 @@ def check_expired_containers():
 @app.route('/make_container/<image>', methods=['POST'])
 @require_secret_key
 def make_container(image):
-    if not AVAILABLE_PORTS:
+    tag = get_tag(image)
+
+    if tag not in TAG_TO_EXPOSED_PORT:
+        logger.error(f"Tag {tag} not supported")
+
+    ports_num = len(TAG_TO_EXPOSED_PORT[tag])
+    print(ports_num)
+
+    if not AVAILABLE_PORTS or len(AVAILABLE_PORTS) < ports_num:
         logger.error("No available ports to create a new container.")
         return jsonify({'error': 'No available ports'}), 500
 
@@ -128,32 +137,40 @@ def make_container(image):
     if is_container_created(name):
         return jsonify({'error': "Couldn't create new container. Container already exists"}), 409
 
-    tag = get_tag(image)
-    with lock:
-        port = random.choice(AVAILABLE_PORTS)
-        exposed_port = TAG_TO_EXPOSED_PORT.get(tag)
+    with (lock):
+        ports = []
+        for i in range(ports_num):
+            port = random.choice(AVAILABLE_PORTS)
+            ports.append(port)
+            AVAILABLE_PORTS.remove(port)
+
+        exposed_ports = TAG_TO_EXPOSED_PORT.get(tag)
         password = generate_random_password()
-        AVAILABLE_PORTS.remove(port)
-        OCCUPIED_PORTS[session_id] = port
+
+        OCCUPIED_PORTS[session_id] = ports
 
     try:
         vm = client.containers.run(
             image,
             detach=True,
-            ports={f'{exposed_port}/tcp': port},
+            ports={f'{exposed_port}/tcp': host_port for exposed_port, host_port in zip(exposed_ports, ports)},
             name=name
         )
 
         if tag == 'vm':
             SESSION_PASSWORDS[session_id] = password
             vm.exec_run(f"bash -c 'echo \"student:{password}\" | chpasswd'")
+        else:
+            SESSION_PASSWORDS[session_id] = "N/A"
 
         with lock:
             CONTAINER_EXPIRATION_TIMES[session_id] = datetime.now() + timedelta(minutes=EXPIRATION_INTERVAL)
 
     except Exception as e:
         with lock:
-            AVAILABLE_PORTS.append(port)
+            for port in ports:
+                AVAILABLE_PORTS.append(port)
+
             del OCCUPIED_PORTS[session_id]
 
             if session_id in SESSION_PASSWORDS:
@@ -166,7 +183,7 @@ def make_container(image):
         return jsonify({'error': str(e)}), 500
 
     running_containers = len(client.containers.list())
-    logger.info(f"Container created: {name} on port {port}. Total running containers: {running_containers}.")
+    logger.info(f"Container created: {name} on ports {', '.join(str(port) for port in ports)}. Total running containers: {running_containers}.")
     return jsonify(status='Container created'), 200
 
 
@@ -192,7 +209,9 @@ def _remove_container(session_id, container_name):
         container.remove()
 
         with lock:
-            AVAILABLE_PORTS.append(OCCUPIED_PORTS[session_id])
+            for port in OCCUPIED_PORTS[session_id]:
+                AVAILABLE_PORTS.append(port)
+
             del OCCUPIED_PORTS[session_id]
 
             if session_id in SESSION_PASSWORDS:
@@ -232,25 +251,27 @@ def container_status(image):
             return jsonify({'status': 'not_created'}), 200
 
         tag = get_tag(container.image.tags[0])
-        port = OCCUPIED_PORTS[session_id]
+        ports = OCCUPIED_PORTS[session_id]
 
-        access_command = None
+        access_commands = None
         if tag == 'vm':
-            access_command = f'ssh -p {port} student@<server_domain>'
+            access_commands = [f'ssh -p {ports[0]} student@<server_domain>']
         elif tag == 'ws':
-            access_command = f'http://<server_domain>:{port}'
+            access_commands = [f'http://<server_domain>:{ports[0]}']
         elif tag == 'sws':
-            access_command = f'https://<server_domain>:{port}'
+            access_commands = [f'https://<server_domain>:{ports[0]}']
+        elif tag == 'ws_over_vm':
+            access_commands = [f'http://<server_domain>:{ports[0]}', f'ssh -p {ports[1]} <server_domain>']
 
         expiration_time = CONTAINER_EXPIRATION_TIMES.get(session_id, 'No expiration time found')
         if isinstance(expiration_time, datetime):
             expiration_time = expiration_time.strftime("%Y-%m-%d %H:%M:%S")
         vm_info = {
             'status': container.status,
-            'port': OCCUPIED_PORTS.get(session_id),
+            'port': ', '.join(str(port) for port in ports),
             'password': SESSION_PASSWORDS.get(session_id),
             'expiration_time': expiration_time,
-            'access_command': access_command
+            'access_commands': access_commands
         }
         return jsonify(vm_info), 200
 
@@ -305,3 +326,6 @@ def restart_container():
 
 
 threading.Thread(target=check_expired_containers, daemon=True).start()
+
+if __name__ == "__main__":
+    app.run(host='localhost', debug=True)

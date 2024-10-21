@@ -116,7 +116,6 @@ def make_container(image):
         logger.error(f"Tag {tag} not supported")
 
     ports_num = len(TAG_TO_EXPOSED_PORT[tag])
-    print(ports_num)
 
     if not AVAILABLE_PORTS or len(AVAILABLE_PORTS) < ports_num:
         logger.error("No available ports to create a new container.")
@@ -132,6 +131,7 @@ def make_container(image):
 
     data = request.json
     session_id = data['session_id']
+    flag = data['flag']
     name = get_container_name(session_id)
 
     if is_container_created(name):
@@ -154,7 +154,8 @@ def make_container(image):
             image,
             detach=True,
             ports={f'{exposed_port}/tcp': host_port for exposed_port, host_port in zip(exposed_ports, ports)},
-            name=name
+            name=name,
+            environment={'CTF_FLAG': flag},
         )
 
         if tag == 'vm':

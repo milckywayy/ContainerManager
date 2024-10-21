@@ -155,7 +155,7 @@ def make_container(image):
             detach=True,
             ports={f'{exposed_port}/tcp': host_port for exposed_port, host_port in zip(exposed_ports, ports)},
             name=name,
-            environment={'CTF_FLAG': flag},
+            environment={'FLAG': flag},
         )
 
         if tag == 'vm':
